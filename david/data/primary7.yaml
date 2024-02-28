@@ -1,0 +1,13 @@
+train: /home/david/dataset/detect/yolov8/classes7/train
+val: /home/david/dataset/detect/yolov8/classes7/val
+#test: /home/david/dataset/detect/Br35H-Mask-RCNN/TEST/
+
+nc: 7
+names:
+  0: person
+  1: rider
+  2: tricycle
+  3: car
+  4: R
+  5: G
+  6: Y
