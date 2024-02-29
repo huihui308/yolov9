@@ -1,8 +1,12 @@
 
 # Inference
 
+## gelan
+
+
+## yolov9
 ```
-$ python3 detect.py --weights weights/yolov9-c.pt --conf 0.1 --source data/cq.mp4 --device 0 --img 1280
+$ python3 detect.py --weights weights/yolov9-c.pt --conf 0.1 --source david/test/cq.mp4 --device 0 --img 1280
 
 $ !python detect.py \
 --img 1280 --conf 0.1 --device 0 \
@@ -11,6 +15,11 @@ $ !python detect.py \
 ```
 
 # Train
+
+## gelan
+
+
+## yolov9
 ```
 $ python3 train.py \
 --batch 8 --epochs 300 --img 640 --device 0 --min-items 0 --close-mosaic 15 \
@@ -19,6 +28,4 @@ $ python3 train.py \
 --cfg models/detect/gelan-c.yaml \
 --hyp hyp.scratch-high.yaml
 ```
-
-
 
