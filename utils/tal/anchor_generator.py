@@ -28,6 +28,7 @@ def make_anchors(feats, strides, grid_cell_offset=0.5):
 
 def dist2bbox(distance, anchor_points, xywh=True, dim=-1):
     """Transform distance(ltrb) to box(xywh or xyxy)."""
+    # distance: torch.Size([8, 8400, 4])    anchor_points: torch.Size([8400, 2])
     lt, rb = torch.split(distance, 2, dim)
     x1y1 = anchor_points - lt
     x2y2 = anchor_points + rb

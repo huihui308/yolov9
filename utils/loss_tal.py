@@ -11,6 +11,7 @@ from utils.tal.assigner import TaskAlignedAssigner
 from utils.torch_utils import de_parallel
 
 
+# https://blog.csdn.net/qq_38253797/article/details/116228065
 def smooth_BCE(eps=0.1):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
     # return positive, negative label smoothing BCE targets
     return 1.0 - 0.5 * eps, 0.5 * eps
@@ -30,27 +31,39 @@ class VarifocalLoss(nn.Module):
 
 
 class FocalLoss(nn.Module):
+    """用在代替原本的BCEcls（分类损失）和BCEobj（置信度损失）
+    Wraps focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
+    论文: https://arxiv.org/abs/1708.02002
+    https://blog.csdn.net/qq_38253797/article/details/116292496
+    TF implementation https://github.com/tensorflow/addons/blob/v0.7.1/tensorflow_addons/losses/focal_loss.py
+    """
     # Wraps focal loss around existing loss_fcn(), i.e. criteria = FocalLoss(nn.BCEWithLogitsLoss(), gamma=1.5)
     def __init__(self, loss_fcn, gamma=1.5, alpha=0.25):
         super().__init__()
         self.loss_fcn = loss_fcn  # must be nn.BCEWithLogitsLoss()
-        self.gamma = gamma
-        self.alpha = alpha
+        self.gamma = gamma  # 参数gamma  用于削弱简单样本对loss的贡献程度
+        self.alpha = alpha  # 参数alpha  用于平衡正负样本个数不均衡的问题
+        # self.reduction: 控制FocalLoss损失输出模式 sum/mean/none   默认是Mean
         self.reduction = loss_fcn.reduction
+        # focalloss中的BCE函数的reduction='None'  BCE不使用Sum或者Mean
         self.loss_fcn.reduction = "none"  # required to apply FL to each element
 
     def forward(self, pred, true):
-        loss = self.loss_fcn(pred, true)
+        loss = self.loss_fcn(pred, true)    # 正常BCE的loss:   loss = -log(p_t)
         # p_t = torch.exp(-loss)
         # loss *= self.alpha * (1.000001 - p_t) ** self.gamma  # non-zero power for gradient stability
 
         # TF implementation https://github.com/tensorflow/addons/blob/v0.7.1/tensorflow_addons/losses/focal_loss.py
         pred_prob = torch.sigmoid(pred)  # prob from logits
+        # true=1 p_t=pred_prob    true=0 p_t=1-pred_prob
         p_t = true * pred_prob + (1 - true) * (1 - pred_prob)
-        alpha_factor = true * self.alpha + (1 - true) * (1 - self.alpha)
-        modulating_factor = (1.0 - p_t) ** self.gamma
+        # true=1 alpha_factor=self.alpha    true=0 alpha_factor=1-self.alpha
+        alpha_factor = true * self.alpha + (1 - true) * (1 - self.alpha)    # alpha_t
+        modulating_factor = (1.0 - p_t) ** self.gamma   # 这里代表Focal loss中的指数项
+        # 返回最终的loss=BCE * 两个参数  (看看公式就行了 和公式一模一样)
         loss *= alpha_factor * modulating_factor
 
+        # 最后选择focalloss返回的类型 默认是mean
         if self.reduction == "mean":
             return loss.mean()
         elif self.reduction == "sum":
@@ -155,8 +168,17 @@ class ComputeLoss:
         return out
 
     def bbox_decode(self, anchor_points, pred_dist):
+        '''
+            预测结果解码
+            1. 对bbox预测回归的分布进行积分
+            2. 结合anc_points，得到所有8400个像素点的预测结果
+        '''
         if self.use_dfl:
+            # b x 8400 x 64
             b, a, c = pred_dist.shape  # batch, anchors, channels
+            # 分布通过 softmax 进行离散化处理
+            # b x 8400 x 64 -> b x 8400 x 4 x 64 -> softmax处理
+            # matmul: 积分，相当于对16个分布值进行加权求和, b x 8400 x 4
             pred_dist = pred_dist.view(b, a, 4, c // 4).softmax(3).matmul(self.proj.type(pred_dist.dtype))
             # pred_dist = pred_dist.view(b, a, c // 4, 4).transpose(2,3).softmax(3).matmul(self.proj.type(pred_dist.dtype))
             # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
@@ -173,14 +195,22 @@ class ComputeLoss:
         dtype = pred_scores.dtype
         batch_size, grid_size = pred_scores.shape[:2]
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
+        # --------- 生成anchors锚点 ---------#
+        # 各尺度特征图每个位置一个锚点Anchors(与yolov5中的anchors不同,此处不是先验框)
+        # 表示每个像素点只有一个预测结果
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
         # targets
+        # ---------- 预测结果预处理 ---------- #
+        # 将多尺度输出整合为一个Tensor,便于整体进展矩阵运算
         targets = self.preprocess(targets, batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        # gt_labels: bs gt_num 1   gt_bboxes: bs gt_num 4
         gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0)
 
         # pboxes
+        # ------------- 解码 ------------- #
+        # 预测回归结果解码到bbox xmin,ymin,xmax,ymax格式
         pred_bboxes = self.bbox_decode(anchor_points, pred_distri)  # xyxy, (b, h*w, 4)
 
         target_labels, target_bboxes, target_scores, fg_mask = self.assigner(

@@ -298,9 +298,15 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                     ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
                     imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
+            """
+            scaler的大小在每次迭代中动态的估计，为了尽可能的减少梯度underflow，scaler应该更大；但是如果太大的话，半精度浮点型的tensor又容易overflow（变成inf或者NaN）。所以动态估计的原理就是在不出现inf或者NaN梯度值的情况下尽可能的增大scaler的值——在每次scaler.step(optimizer)中，都会检查是否有inf或NaN的梯度出现：
+            1、如果出现了inf或者NaN，scaler.step(optimizer)会忽略此次的权重更新（optimizer.step() )，并且将scaler的大小缩小（乘上backoff_factor）；
+            2、如果没有出现inf或者NaN，那么权重正常更新，并且当连续多次（growth_interval指定）没有出现inf或者NaN，则scaler.update()会将scaler的大小增加（乘上growth_factor）。
+            """
             # Forward
+            # 前向过程(model + loss)开启 autocast
             with torch.cuda.amp.autocast(amp):
-                pred = model(imgs)  # forward
+                pred = model(imgs, visualize='runs/train/exp')  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
@@ -308,14 +314,20 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                     loss *= 4.
 
             # Backward
+            # 1、Scales loss.  先将梯度放大 防止梯度消失
             scaler.scale(loss).backward()
 
             # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
             if ni - last_opt_step >= accumulate:
                 scaler.unscale_(optimizer)  # unscale gradients
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                # 2、scaler.step()   再把梯度的值unscale回来.
+                # 如果梯度的值不是 infs 或者 NaNs, 那么调用optimizer.step()来更新权重,
+                # 否则，忽略step调用，从而保证权重不更新（不被破坏）
                 scaler.step(optimizer)  # optimizer.step
+                # 3、准备着，看是否要增大scaler
                 scaler.update()
+                # 正常更新权重
                 optimizer.zero_grad()
                 if ema:
                     ema.update(model)
