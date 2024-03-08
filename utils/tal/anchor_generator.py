@@ -6,6 +6,12 @@ TORCH_1_10 = check_version(torch.__version__, '1.10.0')
 
 
 def make_anchors(feats, strides, grid_cell_offset=0.5):
+    '''
+        各特征图每个像素点一个锚点即Anchors,即每个像素点只预测一个box
+        故共有 80x80 + 40x40 + 20x20 = 8400个anchors
+    '''
+    # anchor_points : 8400 x 2 ，每个像素中心点坐标
+    # stride_tensor: 8400 x 1 ，每个像素的缩放倍数
     """Generate anchors from features."""
     anchor_points, stride_tensor = [], []
     assert feats is not None
