@@ -40,8 +40,6 @@ python3 train.py \
 ```
 
 
-
-
 ## yolov9
 ```
 $ python3 train_dual.py \
@@ -59,8 +57,6 @@ $ python3 train_dual.py \
 ```
 
 
-
-
 python3 train_dual.py \
 --batch 2 --epochs 20 --img 640 --device 0 --min-items 0 --close-mosaic 15 \
 --data david/data/primary7.yaml \
@@ -74,3 +70,15 @@ python3 train_dual.py \
 --weights runs/train/primary7_yolov9_c_245epoch_scratch/weights/best.pt \
 --cfg david/models/detect/primary7-yolov9-c.yaml \
 --hyp hyp.scratch-high.yaml
+
+
+
+# Export
+
+## gelan
+
+```
+$ python3 export.py --weights runs/train/primary7_gelan_c_300epoch_finetune/weights/best.pt --include onnx
+```
+
+

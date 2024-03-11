@@ -148,6 +148,7 @@ class ComputeLoss:
                                             num_classes=self.nc,
                                             alpha=float(os.getenv('YOLOA', 0.5)),
                                             beta=float(os.getenv('YOLOB', 6.0)))
+        # dfs: distribution focal loss, https://stackoverflow.com/questions/75950283/yolov8-dfl-loss-metric
         self.bbox_loss = BboxLoss(m.reg_max - 1, use_dfl=use_dfl).to(device)
         self.proj = torch.arange(m.reg_max).float().to(device)  # / 120.0
         self.use_dfl = use_dfl
