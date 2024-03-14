@@ -568,7 +568,7 @@ class DetectionModel(BaseModel):
             m.stride = torch.tensor([s / x.shape[-2] for x in forward(torch.zeros(1, ch, s, s))])  # forward
             # check_anchor_order(m)
             # m.anchors /= m.stride.view(-1, 1, 1)
-            self.stride = m.stride
+            self.stride = m.stride      # tensor([ 8., 16., 32.])
             m.bias_init()  # only run once
 
         # Init weights, biases

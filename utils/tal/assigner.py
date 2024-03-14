@@ -159,9 +159,14 @@ class TaskAlignedAssigner(nn.Module):
         ind[0] = torch.arange(end=self.bs).view(-1, 1).repeat(1, self.n_max_boxes)  # b, max_num_obj
         ind[1] = gt_labels.squeeze(-1)  # b, max_num_obj
         # pd_scores[ind[0]] 将每个batch的生成的预测框的重复 max_num_obj 次 size 大小变为 b*max_num_obj*num_total_anchors*num_classes
+        # pd_scores[ind[0]].shape: torch.Size([2, 78, 8400, 7])
+        #print(pd_scores[ind[0]].shape)
         # bbox_scores 的 size 为 b*max_num_obj*num_total_anchors，ind[1] 对类别进行得分进行选取
         # get the scores of each grid for each gt cls
         bbox_scores = pd_scores[ind[0], :, ind[1]]  # b, max_num_obj, h*w
+        # torch.Size([2, 8400, 7]) torch.Size([2, 78]) torch.Size([2, 78]) torch.Size([2, 78, 8400])
+        # 78: n_max_boxes   2: bs
+        #print(pd_scores.shape, ind[0].shape, ind[1].shape, bbox_scores.shape)
 
         # overlaps 的 size 为 b*max_num_obj*num_total_anchors
         # gt_bboxes.unsqueeze(2) 的 size 为 b*max_num_obj*1*4

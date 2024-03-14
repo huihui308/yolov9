@@ -91,6 +91,7 @@ class BboxLoss(nn.Module):
 
         return loss_iou, loss_dfl, iou
 
+    # 以类似交叉熵的形式去优化与标签y最接近的一左一右两个位置的概率，从而让网络快速地聚焦到目标位置的邻近区域的分布中去
     def _df_loss(self, pred_dist, target):
         target_left = target.to(torch.long)
         target_right = target_left + 1
